@@ -39,7 +39,6 @@
 static char disk[] = "tests/pxe-test-disk-XXXXXX";
 static const char *root;
 static const char *tmpfs;
-static const char *tmpfs2;
 
 static const char *init_hugepagefs(const char *path)
 {
@@ -71,13 +70,13 @@ static const char *init_hugepagefs(const char *path)
 static void test_pxe_vhost_user(void)
 {
     char template[] = "/tmp/vhost-user-bridge-XXXXXX";
-    char template2[] = "/tmp/hugepages-XXXXXX";
     gchar *vubr_args[] = {NULL, NULL, NULL, NULL};
     const char *hugefs;
     GError *error = NULL;
     char *vubr_binary;
     char *qemu_args;
     GPid vubr_pid;
+    int ret;
 
     tmpfs = mkdtemp(template);
     if (!tmpfs) {
@@ -95,16 +94,13 @@ static void test_pxe_vhost_user(void)
                   G_SPAWN_SEARCH_PATH,
                   NULL, NULL, &vubr_pid, &error);
     g_assert_no_error(error);
-    g_usleep(1 * G_USEC_PER_SEC); //REMOVE
 
     hugefs = getenv("QTEST_HUGETLBFS_PATH");
     if (hugefs) {
         root = init_hugepagefs(hugefs);
         g_assert(root);
     } else {
-        tmpfs2 = mkdtemp(template2);
-        g_assert(tmpfs2);
-        root = tmpfs2;
+        root = tmpfs;
     }
 
     qemu_args = g_strdup_printf(QEMU_CMD, MEMSZ, MEMSZ, (root),
@@ -118,6 +114,12 @@ static void test_pxe_vhost_user(void)
     g_free(vubr_args[0]);
     g_free(vubr_args[1]);
     g_free(vubr_args[2]);
+    ret = rmdir(tmpfs);
+    if (ret != 0) {
+        g_test_message("unable to rmdir: path (%s): %s\n",
+                       tmpfs, strerror(errno));
+    }
+    g_assert_cmpint(ret, ==, 0);
 }
 
 static void test_pxe_one(const char *params, bool ipv6)
