@@ -1570,6 +1570,7 @@ static void virtio_pci_pre_plugged(DeviceState *d, Error **errp)
 
     if (virtio_pci_modern(proxy)) {
         virtio_add_feature(&vdev->host_features, VIRTIO_F_VERSION_1);
+        virtio_add_feature(&vdev->host_features, VIRTIO_F_VERSION_1_1);
     }
 
     virtio_add_feature(&vdev->host_features, VIRTIO_F_BAD_FEATURE);

@@ -64,6 +64,7 @@ static const int user_feature_bits[] = {
 
     VIRTIO_F_ANY_LAYOUT,
     VIRTIO_F_VERSION_1,
+    VIRTIO_F_VERSION_1_1,
     VIRTIO_NET_F_CSUM,
     VIRTIO_NET_F_GUEST_CSUM,
     VIRTIO_NET_F_GSO,
