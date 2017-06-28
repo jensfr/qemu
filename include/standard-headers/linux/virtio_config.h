@@ -71,4 +71,5 @@
  * this is for compatibility with legacy systems.
  */
 #define VIRTIO_F_IOMMU_PLATFORM		33
+#define VIRTIO_F_PACKED_RING            34
 #endif /* _LINUX_VIRTIO_CONFIG_H */
