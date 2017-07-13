@@ -34,7 +34,7 @@
 #include "standard-headers/linux/virtio_net.h"
 #include "contrib/libvhost-user/libvhost-user.h"
 
-#define VHOST_USER_BRIDGE_DEBUG 0
+#define VHOST_USER_BRIDGE_DEBUG 1
 
 #define DPRINT(...) \
     do { \
@@ -612,6 +612,8 @@ vubr_backend_udp_setup(VubrDev *dev,
     }
 
     if (bind(sock, (struct sockaddr *)&si_local, sizeof(si_local)) == -1) {
+        printf("local addr, %s, r addr, %s\n", local_host, remote_host);
+        printf("local port, %s, r port, %s\n", local_port, remote_port);
         vubr_die("bind");
     }
 
