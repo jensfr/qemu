@@ -240,6 +240,24 @@ static void vring_desc_read(VirtIODevice *vdev, VRingDesc *desc,
     virtio_tswap16s(vdev, &desc->next);
 }
 
+static void vring_packed_event_read(VirtIODevice *vdev,
+                            MemoryRegionCache *cache, VRingPackedDescEvent *e)
+{
+    address_space_read_cached(cache, 0, e, sizeof(*e));
+    virtio_tswap16s(vdev, &e->off_wrap);
+    virtio_tswap16s(vdev, &e->flags);
+}
+
+static void vring_packed_event_write(VirtIODevice *vdev,
+                            MemoryRegionCache *cache, VRingPackedDescEvent *e)
+{
+    virtio_tswap16s(vdev, &e->off_wrap);
+    virtio_tswap16s(vdev, &e->flags);
+    address_space_write_cached(cache, 0, e, sizeof(*e));
+    address_space_cache_invalidate(cache, 0, sizeof(VRingUsedElem));
+}
+
+
 static VRingMemoryRegionCaches *vring_get_region_caches(struct VirtQueue *vq)
 {
     VRingMemoryRegionCaches *caches = atomic_rcu_read(&vq->vring.caches);
@@ -346,14 +364,8 @@ static inline void vring_set_avail_event(VirtQueue *vq, uint16_t val)
     address_space_cache_invalidate(&caches->used, pa, sizeof(val));
 }
 
-void virtio_queue_set_notification(VirtQueue *vq, int enable)
+static void virtio_queue_set_notification_split(VirtQueue *vq, int enable)
 {
-    vq->notification = enable;
-
-    if (!vq->vring.desc) {
-        return;
-    }
-
     rcu_read_lock();
     if (virtio_vdev_has_feature(vq->vdev, VIRTIO_RING_F_EVENT_IDX)) {
         vring_set_avail_event(vq, vring_avail_idx(vq));
@@ -367,6 +379,38 @@ void virtio_queue_set_notification(VirtQueue *vq, int enable)
         smp_mb();
     }
     rcu_read_unlock();
+}
+
+static void virtio_queue_set_notification_packed(VirtQueue *vq, int enable)
+{
+    VRingPackedDescEvent e;
+    VRingMemoryRegionCaches *caches;
+
+    rcu_read_lock();
+    caches  = vring_get_region_caches(vq);
+    vring_packed_event_read(vq->vdev, &caches->device, &e);
+    if (enable) {
+        e.flags = RING_EVENT_FLAGS_ENABLE;
+    } else {
+        e.flags = RING_EVENT_FLAGS_DISABLE;
+    }
+    vring_packed_event_write(vq->vdev, &caches->device, &e);
+    rcu_read_unlock();
+}
+
+void virtio_queue_set_notification(VirtQueue *vq, int enable)
+{
+    vq->notification = enable;
+
+    if (!vq->vring.desc) {
+        return;
+    }
+
+    if (virtio_vdev_has_feature(vq->vdev, VIRTIO_F_RING_PACKED)) {
+        virtio_queue_set_notification_packed(vq, enable);
+    } else {
+        virtio_queue_set_notification_split(vq, enable);
+    }
 }
 
 int virtio_queue_ready(VirtQueue *vq)
@@ -2062,8 +2106,7 @@ static void virtio_set_isr(VirtIODevice *vdev, int value)
     }
 }
 
-/* Called within rcu_read_lock().  */
-static bool virtio_should_notify(VirtIODevice *vdev, VirtQueue *vq)
+static bool virtio_split_should_notify(VirtIODevice *vdev, VirtQueue *vq)
 {
     uint16_t old, new;
     bool v;
@@ -2084,6 +2127,60 @@ static bool virtio_should_notify(VirtIODevice *vdev, VirtQueue *vq)
     old = vq->signalled_used;
     new = vq->signalled_used = vq->used_idx;
     return !v || vring_need_event(vring_get_used_event(vq), new, old);
+}
+
+static bool vring_packed_need_event(VirtQueue *vq, uint16_t off_wrap,
+                                    uint16_t new, uint16_t old)
+{
+    bool wrap = vq->used_wrap_counter;
+    int off = off_wrap & ~(1 << 15);
+
+    if (new < old) {
+        new += vq->vring.num;
+        wrap ^= 1;
+    }
+
+    if (wrap != off_wrap >> 15) {
+        off += vq->vring.num;
+    }
+
+    return vring_need_event(off, new, old);
+}
+
+static bool virtio_packed_should_notify(VirtIODevice *vdev, VirtQueue *vq)
+{
+    VRingPackedDescEvent e;
+    uint16_t old, new;
+    bool v;
+    VRingMemoryRegionCaches *caches;
+
+    caches  = vring_get_region_caches(vq);
+    vring_packed_event_read(vdev, &caches->driver, &e);
+
+    /* Make sure we see the updated flags */
+    smp_mb();
+    if (e.flags == RING_EVENT_FLAGS_DISABLE) {
+        return false;
+    } else if (e.flags == RING_EVENT_FLAGS_ENABLE) {
+        return true;
+    }
+
+    v = vq->signalled_used_valid;
+    vq->signalled_used_valid = true;
+    old = vq->signalled_used;
+    new = vq->signalled_used = vq->used_idx;
+
+    return !v || vring_packed_need_event(vq, e.off_wrap, new, old);
+}
+
+/* Called within rcu_read_lock().  */
+static bool virtio_should_notify(VirtIODevice *vdev, VirtQueue *vq)
+{
+    if (virtio_vdev_has_feature(vdev, VIRTIO_F_RING_PACKED)) {
+        return virtio_packed_should_notify(vdev, vq);
+    } else {
+        return virtio_split_should_notify(vdev, vq);
+    }
 }
 
 void virtio_notify_irqfd(VirtIODevice *vdev, VirtQueue *vq)
