@@ -39,6 +39,13 @@ typedef struct VRingDesc
     uint16_t next;
 } VRingDesc;
 
+typedef struct VRingDescPacked {
+    uint64_t addr;
+    uint32_t len;
+    uint16_t id;
+    uint16_t flags;
+} VRingDescPacked;
+
 typedef struct VRingAvail
 {
     uint16_t flags;
@@ -62,8 +69,14 @@ typedef struct VRingUsed
 typedef struct VRingMemoryRegionCaches {
     struct rcu_head rcu;
     MemoryRegionCache desc;
-    MemoryRegionCache avail;
-    MemoryRegionCache used;
+    union {
+        MemoryRegionCache avail;
+        MemoryRegionCache driver;
+    };
+    union {
+        MemoryRegionCache used;
+        MemoryRegionCache device;
+    };
 } VRingMemoryRegionCaches;
 
 typedef struct VRing
@@ -77,6 +90,11 @@ typedef struct VRing
     VRingMemoryRegionCaches *caches;
 } VRing;
 
+typedef struct VRingPackedDescEvent {
+    uint16_t off_wrap;
+    uint16_t flags;
+} VRingPackedDescEvent ;
+
 struct VirtQueue
 {
     VRing vring;
@@ -88,6 +106,9 @@ struct VirtQueue
     uint16_t shadow_avail_idx;
 
     uint16_t used_idx;
+
+    bool avail_wrap_counter;
+    bool used_wrap_counter;
 
     /* Last used index value we have signalled on */
     uint16_t signalled_used;
@@ -1216,6 +1237,8 @@ void virtio_reset(void *opaque)
         vdev->vq[i].last_avail_idx = 0;
         vdev->vq[i].shadow_avail_idx = 0;
         vdev->vq[i].used_idx = 0;
+        vdev->vq[i].avail_wrap_counter = true;
+        vdev->vq[i].used_wrap_counter = true;
         virtio_queue_set_vector(vdev, i, VIRTIO_NO_VECTOR);
         vdev->vq[i].signalled_used = 0;
         vdev->vq[i].signalled_used_valid = false;
