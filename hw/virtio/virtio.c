@@ -2865,33 +2865,59 @@ hwaddr virtio_queue_get_used_size(VirtIODevice *vdev, int n)
     }
 }
 
-uint16_t virtio_queue_get_last_avail_idx(VirtIODevice *vdev, int n)
+uint64_t virtio_queue_get_last_avail_idx(VirtIODevice *vdev, int n)
 {
-    return vdev->vq[n].last_avail_idx;
+    uint64_t num;
+
+    num = vdev->vq[n].last_avail_idx;
+    if (virtio_vdev_has_feature(vdev, VIRTIO_F_RING_PACKED)) {
+        num |= ((uint64_t)vdev->vq[n].avail_wrap_counter) << 16;
+        num |= ((uint64_t)vdev->vq[n].used_idx) << 32;
+        num |= ((uint64_t)vdev->vq[n].used_wrap_counter) << 48;
+    }
+
+    return num;
 }
 
-void virtio_queue_set_last_avail_idx(VirtIODevice *vdev, int n, uint16_t idx)
+void virtio_queue_set_last_avail_idx(VirtIODevice *vdev, int n, uint64_t num)
 {
-    vdev->vq[n].last_avail_idx = idx;
-    vdev->vq[n].shadow_avail_idx = idx;
+    vdev->vq[n].shadow_avail_idx = vdev->vq[n].last_avail_idx = (uint16_t)(num);
+
+    if (virtio_vdev_has_feature(vdev, VIRTIO_F_RING_PACKED)) {
+        vdev->vq[n].avail_wrap_counter = (uint16_t)(num >> 16);
+        vdev->vq[n].used_idx = (uint16_t)(num >> 32);
+        vdev->vq[n].used_wrap_counter = (uint16_t)(num >> 48);
+    }
 }
 
 void virtio_queue_restore_last_avail_idx(VirtIODevice *vdev, int n)
 {
     rcu_read_lock();
-    if (vdev->vq[n].vring.desc) {
-        vdev->vq[n].last_avail_idx = vring_used_idx(&vdev->vq[n]);
-        vdev->vq[n].shadow_avail_idx = vdev->vq[n].last_avail_idx;
+    if (!vdev->vq[n].vring.desc) {
+        goto out;
     }
+
+    if (!virtio_vdev_has_feature(vdev, VIRTIO_F_RING_PACKED)) {
+        vdev->vq[n].last_avail_idx = vring_used_idx(&vdev->vq[n]);
+    }
+    vdev->vq[n].shadow_avail_idx = vdev->vq[n].last_avail_idx;
+
+out:
     rcu_read_unlock();
 }
 
 void virtio_queue_update_used_idx(VirtIODevice *vdev, int n)
 {
     rcu_read_lock();
-    if (vdev->vq[n].vring.desc) {
+    if (!vdev->vq[n].vring.desc) {
+        goto out;
+    }
+
+    if (!virtio_vdev_has_feature(vdev, VIRTIO_F_RING_PACKED)) {
         vdev->vq[n].used_idx = vring_used_idx(&vdev->vq[n]);
     }
+
+out:
     rcu_read_unlock();
 }
 
