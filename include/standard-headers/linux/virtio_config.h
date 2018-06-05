@@ -73,4 +73,17 @@
 #define VIRTIO_F_IOMMU_PLATFORM		33
 
 #define VIRTIO_F_RING_PACKED		34
+
+/* Enable events */
+#define RING_EVENT_FLAGS_ENABLE 0x0
+/* Disable events */
+#define RING_EVENT_FLAGS_DISABLE 0x1
+/*
+ *  * Enable events for a specific descriptor
+ *   * (as specified by Descriptor Ring Change Event Offset/Wrap Counter).
+ *    * Only valid if VIRTIO_F_RING_EVENT_IDX has been negotiated.
+ *     */
+#define RING_EVENT_FLAGS_DESC 0x2
+/* The value 0x3 is reserved */
+
 #endif /* _LINUX_VIRTIO_CONFIG_H */
