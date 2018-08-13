@@ -1872,8 +1872,7 @@ static void main_loop(void)
 
 static void version(void)
 {
-    printf("QEMU emulator version " QEMU_FULL_VERSION "\n"
-           QEMU_COPYRIGHT "\n");
+    printf("QEMU emulator version \n");
 }
 
 static void help(int exitcode)
@@ -3188,12 +3187,6 @@ int main(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-            case QEMU_OPTION_nic:
-                default_net = 0;
-                if (net_client_parse(qemu_find_opts("nic"), optarg) == -1) {
-                    exit(1);
-                }
-                break;
             case QEMU_OPTION_net:
                 default_net = 0;
                 if (net_client_parse(qemu_find_opts("net"), optarg) == -1) {
@@ -3591,9 +3584,6 @@ int main(int argc, char **argv, char **envp)
                     exit(1);
                 }
                 break;
-            case QEMU_OPTION_preconfig:
-                preconfig_exit_requested = false;
-                break;
             case QEMU_OPTION_enable_kvm:
                 olist = qemu_find_opts("machine");
                 qemu_opts_parse_noisily(olist, "accel=kvm", false);
@@ -3927,17 +3917,6 @@ int main(int argc, char **argv, char **envp)
                 /* Don't override the -overcommit option if set */
                 enable_mlock = enable_mlock ||
                     qemu_opt_get_bool(opts, "mlock", true);
-                break;
-            case QEMU_OPTION_overcommit:
-                opts = qemu_opts_parse_noisily(qemu_find_opts("overcommit"),
-                                               optarg, false);
-                if (!opts) {
-                    exit(1);
-                }
-                /* Don't override the -realtime option if set */
-                enable_mlock = enable_mlock ||
-                    qemu_opt_get_bool(opts, "mem-lock", false);
-                enable_cpu_pm = qemu_opt_get_bool(opts, "cpu-pm", false);
                 break;
             case QEMU_OPTION_msg:
                 opts = qemu_opts_parse_noisily(qemu_find_opts("msg"), optarg,

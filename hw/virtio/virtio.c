@@ -954,7 +954,7 @@ static void virtqueue_packed_get_avail_bytes(VirtQueue *vq,
     vring_packed_desc_read(vdev, &desc, desc_cache, idx);
     while (is_desc_avail(&desc)) {
         unsigned int num_bufs;
-        unsigned int i;
+        unsigned int i = 0;
 
         num_bufs = total_bufs;
 
