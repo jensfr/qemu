@@ -173,7 +173,7 @@ static void virtio_init_region_cache(VirtIODevice *vdev, int n)
     new = g_new0(VRingMemoryRegionCaches, 1);
     size = virtio_queue_get_desc_size(vdev, n);
     len = address_space_cache_init(&new->desc, vdev->dma_as,
-                                   addr, size, false);
+                                   addr, size, true);
     if (len < size) {
         virtio_error(vdev, "Cannot map desc");
         goto err_desc;
