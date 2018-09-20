@@ -1286,7 +1286,7 @@ static ssize_t virtio_net_receive_rcu(NetClientState *nc, const uint8_t *buf,
                      &mhdr.num_buffers, sizeof mhdr.num_buffers);
     }
 
-    virtqueue_flush(q->rx_vq, i);
+    virtqueue_flush(q->rx_vq, i, mhdr.num_buffers);
     virtio_notify(vdev, q->rx_vq);
 
     return size;
