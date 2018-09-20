@@ -171,7 +171,7 @@ static void virtio_init_region_cache(VirtIODevice *vdev, int n)
     attr = virtio_vdev_has_feature(vq->vdev, VIRTIO_F_RING_PACKED) ?
                                    true : false;
     len = address_space_cache_init(&new->desc, vdev->dma_as,
-                                   addr, size, attr);
+                                   addr, size, true);
     if (len < size) {
         virtio_error(vdev, "Cannot map desc");
         goto err_desc;
@@ -754,21 +754,21 @@ static void virtqueue_split_flush(VirtQueue *vq, unsigned int count)
         vq->signalled_used_valid = false;
 }
 
-static void virtqueue_packed_flush(VirtQueue *vq, unsigned int count)
+static void virtqueue_packed_flush(VirtQueue *vq, unsigned int count, unsigned int chain_len)
 {
     if (unlikely(!vq->vring.desc)) {
         return;
     }
 
     vq->inuse -= count;
-    vq->used_idx += count;
+    vq->used_idx += chain_len;
     if (vq->used_idx >= vq->vring.num) {
         vq->used_idx -= vq->vring.num;
         vq->used_wrap_counter ^= 1;
     }
 }
 
-void virtqueue_flush(VirtQueue *vq, unsigned int count)
+void virtqueue_flush(VirtQueue *vq, unsigned int count, unsigned int chain_len)
 {
     if (unlikely(vq->vdev->broken)) {
         vq->inuse -= count;
@@ -776,7 +776,7 @@ void virtqueue_flush(VirtQueue *vq, unsigned int count)
     }
 
     if (virtio_vdev_has_feature(vq->vdev, VIRTIO_F_RING_PACKED)) {
-        virtqueue_packed_flush(vq, count);
+        virtqueue_packed_flush(vq, count, chain_len);
     } else {
         virtqueue_split_flush(vq, count);
     }
@@ -787,7 +787,7 @@ void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
 {
     rcu_read_lock();
     virtqueue_fill(vq, elem, len, 0);
-    virtqueue_flush(vq, 1);
+    virtqueue_flush(vq, 1, elem->out_num + elem->in_num);
     rcu_read_unlock();
 }
 

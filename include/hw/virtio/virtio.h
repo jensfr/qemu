@@ -165,7 +165,7 @@ void virtio_del_queue(VirtIODevice *vdev, int n);
 
 void virtqueue_push(VirtQueue *vq, const VirtQueueElement *elem,
                     unsigned int len);
-void virtqueue_flush(VirtQueue *vq, unsigned int count);
+void virtqueue_flush(VirtQueue *vq, unsigned int count, unsigned int chain_len);
 void virtqueue_detach_element(VirtQueue *vq, const VirtQueueElement *elem,
                               unsigned int len);
 void virtqueue_unpop(VirtQueue *vq, const VirtQueueElement *elem,
