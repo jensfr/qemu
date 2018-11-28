@@ -1478,7 +1478,11 @@ static void *virtqueue_packed_pop(VirtQueue *vq, size_t sz)
             i -= vq->vring.num;
         }
 
-        if (desc.flags & VRING_DESC_F_NEXT) {
+        if (cache == &indirect_desc_cache) {
+            if (i == max)
+                break;
+            vring_packed_desc_read(vq->vdev, &desc, cache, i);
+        } else if (desc.flags & VRING_DESC_F_NEXT) {
             vring_packed_desc_read(vq->vdev, &desc, cache, i);
         } else {
             break;
