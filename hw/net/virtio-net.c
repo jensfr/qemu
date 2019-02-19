@@ -778,11 +778,18 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint64_t features)
     }
 
     if (virtio_has_feature(features, VIRTIO_NET_F_STANDBY)) {
+        Error *err = NULL;
         atomic_set(&n->primary_should_be_hidden, false);
+
+        n->primary_dev = qdev_device_add(n->primary_device_opts, &err);
+        if (!n->primary_dev && err)
+            fprintf(stderr, "VIRTIO:::: plugging primary device didn't work\n");
+/*
         if (n->primary_device_timer)
             timer_mod(n->primary_device_timer,
                 qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) +
-                4000);
+                500);
+*/
     }
 }
 
