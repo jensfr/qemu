@@ -33,6 +33,7 @@
 #include "qemu/option.h"
 #include "sysemu/block-backend.h"
 #include "migration/misc.h"
+#include "migration/migration.h"
 
 /*
  * Aliases were a bad idea from the start.  Let's keep them
@@ -575,6 +576,10 @@ static int has_standby_device(void *opaque, const char *name, const char *value,
     if (strcmp(name, "standby") == 0)
     {
         QemuOpts *opts = (QemuOpts *)opaque;
+        if (NULL == opts) {
+            fprintf(stderr, "opts is null\n");
+            return -1;
+    }
         if (qdev_should_hide_device(opts, errp) && errp && !*errp)
         {
             return 1;
@@ -604,7 +609,7 @@ DeviceState *qdev_device_add(QemuOpts *opts, Error **errp)
     BusState *bus = NULL;
     Error *err = NULL;
     
-    if (should_hide_device(opts, &err))
+    if (opts && should_hide_device(opts, &err))
     {
         if(err)
         {
@@ -913,7 +918,10 @@ void qdev_unplug(DeviceState *dev, Error **errp)
         return;
     }
 
-    if (!migration_is_idle()) {
+    MigrationState *s = migrate_get_current();
+    if (migration_in_setup(s)) {
+        fprintf(stderr, "migration in setup, unplugging okay...\n");
+    } else if (!migration_is_idle()) {
         error_setg(errp, "device_del not allowed while migrating");
         return;
     }
