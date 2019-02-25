@@ -3224,7 +3224,10 @@ static Property vfio_pci_dev_properties[] = {
 
 static const VMStateDescription vfio_pci_vmstate = {
     .name = "vfio-pci",
-    .unmigratable = 1,
+    .fields = (VMStateField[]) {
+        VMSTATE_END_OF_LIST()
+    },
+    .unmigratable = 0,
 };
 
 static void vfio_pci_dev_class_init(ObjectClass *klass, void *data)
