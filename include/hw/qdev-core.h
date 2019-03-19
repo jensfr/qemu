@@ -154,6 +154,13 @@ struct DeviceState {
 struct DeviceListener {
     void (*realize)(DeviceListener *listener, DeviceState *dev);
     void (*unrealize)(DeviceListener *listener, DeviceState *dev);
+    /*
+     * This callback is called upon init of the DeviceState and allows to
+     * inform qdev that a device should be hidden, depending on the device
+     * opts, for example, to hide a standby device.
+     */
+    void (*should_be_hidden)(DeviceListener *listener, QemuOpts *device_opts,
+            bool *match_found, bool *res);
     QTAILQ_ENTRY(DeviceListener) link;
 };
 
@@ -450,5 +457,7 @@ static inline bool qbus_is_hotpluggable(BusState *bus)
 
 void device_listener_register(DeviceListener *listener);
 void device_listener_unregister(DeviceListener *listener);
+
+bool qdev_should_hide_device(QemuOpts *opts, Error **errp);
 
 #endif
