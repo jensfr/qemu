@@ -21,6 +21,8 @@
 #include "qemu/error-report.h"
 #include "qemu/timer.h"
 #include "qemu/option.h"
+#include "qemu/option_int.h"
+#include "qemu/config-file.h"
 #include "hw/virtio/virtio-net.h"
 #include "net/vhost_net.h"
 #include "net/announce.h"
@@ -2646,7 +2648,12 @@ static void virtio_net_primary_plug_timer(void *opaque)
     VirtIONet *n = opaque;
     Error *err = NULL;
 
-    n->primary_dev = qdev_device_add(n->primary_device_opts, &err);
+    if (n->primary_device_dict)
+        n->primary_device_opts = qemu_opts_from_qdict(qemu_find_opts("device"),
+            n->primary_device_dict, &err);
+    /* is this check sufficient or should we check for valid data in the opt? */
+    if (n->primary_device_opts)
+        n->primary_dev = qdev_device_add(n->primary_device_opts, &err);
     if (!n->primary_dev && err)
     {
         if (n->primary_device_timer)
@@ -2662,10 +2669,6 @@ static void virtio_net_handle_migration_primary(VirtIONet *n, MigrationState * s
     bool should_be_hidden = atomic_read(&n->primary_should_be_hidden);
 
     if (migration_in_setup(s) && !should_be_hidden && n->primary_dev) {
-        /* Request unplug
-         *
-         *
-        */
         qdev_unplug(n->primary_dev, &err);
         if (!err)
         {
@@ -2691,21 +2694,20 @@ static void migration_state_notifier(Notifier *notifier, void *data)
     virtio_net_handle_migration_primary(n,s);
 }
 
-static void virtio_net_primary_should_be_hidden(DeviceListener *listener, QemuOpts *device_opts,
-            bool *match_found, bool *res)
+static void virtio_net_primary_should_be_hidden(DeviceListener *listener,
+            QemuOpts *device_opts, bool *match_found, bool *res)
 {
    VirtIONet *n = container_of(listener, VirtIONet, primary_listener);
-   const char * dev_id = qemu_opts_id(device_opts);
 
-    *match_found = !strcmp(n->net_conf.primary_id_str ,dev_id);
-    if (atomic_read(&n->primary_should_be_hidden) && !strcmp(qemu_opt_get(device_opts, "driver"), "vfio-pci")
-    && *match_found)
+    //TODO primary_device_opts need to be freed
+    *match_found = !strcmp(qemu_opt_get(device_opts, "standby"), "net1");
+    if (atomic_read(&n->primary_should_be_hidden) && *match_found)
     {
-        n->primary_device_opts = device_opts;
+        n->primary_device_dict = qemu_opts_to_qdict(device_opts,
+            n->primary_device_dict);
         *res = true;
         return;
     }
-
     *res = false;
 }
 
@@ -2739,7 +2741,7 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
         n->host_features |= (1ULL << VIRTIO_NET_F_SPEED_DUPLEX);
     }
 
-    if (n->net_conf.primary_id_str) {
+    if (n->failover) {
         n->primary_listener.should_be_hidden = virtio_net_primary_should_be_hidden;
         atomic_set(&n->primary_should_be_hidden, true);
         device_listener_register(&n->primary_listener);
@@ -2979,7 +2981,7 @@ static Property virtio_net_properties[] = {
                      true),
     DEFINE_PROP_INT32("speed", VirtIONet, net_conf.speed, SPEED_UNKNOWN),
     DEFINE_PROP_STRING("duplex", VirtIONet, net_conf.duplex_str),
-    DEFINE_PROP_STRING("primary", VirtIONet, net_conf.primary_id_str),
+    DEFINE_PROP_BOOL("failover", VirtIONet, failover, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 

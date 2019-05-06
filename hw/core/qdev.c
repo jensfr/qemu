@@ -228,13 +228,6 @@ bool qdev_should_hide_device(QemuOpts *opts, Error **errp)
             break;
         }
     }
-    /* No suitable pair device was found */
-    if (!match_found)
-    {
-        error_setg(errp, "An error occurred: Couln't attach to standby device"
-        " Please note that the primary device should be"
-        " must be placed after the standby device in the command line");
-    }
     return res;
 }
 

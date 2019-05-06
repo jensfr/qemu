@@ -31,6 +31,7 @@
 #include "qemu/error-report.h"
 #include "qemu/help_option.h"
 #include "qemu/option.h"
+#include "qemu/option_int.h"
 #include "sysemu/block-backend.h"
 #include "migration/misc.h"
 #include "migration/migration.h"
@@ -570,12 +571,13 @@ void qdev_set_id(DeviceState *dev, const char *id)
     }
 }
 
-static int has_standby_device(void *opaque, const char *name, const char *value,
+static int is_failover_device(void *opaque, const char *name, const char *value,
                         Error **errp)
 {
     if (strcmp(name, "standby") == 0)
     {
         QemuOpts *opts = (QemuOpts *)opaque;
+
         if (qdev_should_hide_device(opts, errp) && errp && !*errp)
         {
             return 1;
@@ -590,7 +592,8 @@ static int has_standby_device(void *opaque, const char *name, const char *value,
 
 static bool should_hide_device(QemuOpts *opts, Error **err)
 {
-    if (qemu_opt_foreach(opts, has_standby_device, opts, err) == 0)
+
+    if (qemu_opt_foreach(opts, is_failover_device, opts, err) == 0)
     {
         return false;
     }
@@ -604,7 +607,6 @@ DeviceState *qdev_device_add(QemuOpts *opts, Error **errp)
     DeviceState *dev = NULL;
     BusState *bus = NULL;
     Error *err = NULL;
-    
     if (opts && should_hide_device(opts, &err))
     {
         if(err)

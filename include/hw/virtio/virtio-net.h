@@ -18,6 +18,7 @@
 #include "standard-headers/linux/virtio_net.h"
 #include "hw/virtio/virtio.h"
 #include "net/announce.h"
+#include "qemu/option_int.h"
 
 #define TYPE_VIRTIO_NET "virtio-net-device"
 #define VIRTIO_NET(obj) \
@@ -187,8 +188,11 @@ struct VirtIONet {
     bool needs_vnet_hdr_swap;
     bool mtu_bypass_backend;
     QemuOpts *primary_device_opts;
+    QemuOptsList *optlist;
+    QDict *primary_device_dict;
     DeviceState *primary_dev;
     bool primary_should_be_hidden;
+    bool failover;
     DeviceListener primary_listener;
     QEMUTimer *primary_device_timer;
     Notifier migration_state;

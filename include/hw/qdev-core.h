@@ -144,7 +144,6 @@ struct DeviceState {
     char *canonical_path;
     bool realized;
     bool pending_deleted_event;
-    bool hidden;
     QemuOpts *opts;
     int hotplugged;
     BusState *parent_bus;
