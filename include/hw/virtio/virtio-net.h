@@ -196,6 +196,8 @@ struct VirtIONet {
     bool failover;
     DeviceListener primary_listener;
     QEMUTimer *primary_device_timer;
+    VMChangeStateEntry *change;
+    RunState old_runstate;
     Notifier migration_state;
 };
 

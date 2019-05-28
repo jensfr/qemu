@@ -2725,6 +2725,21 @@ static void virtio_net_primary_should_be_hidden(DeviceListener *listener,
     n->primary_device_id = g_strdup(device_opts->id);
 }
 
+static void virtio_net_failover_migrate_cb(void *opaque, int running,
+                                      RunState state)
+{
+    VirtIONet *n = opaque;
+
+    if (!running) {
+        return;
+    }
+
+    if (n->old_runstate == RUN_STATE_INMIGRATE) {
+        /* migration is over unplug */
+        return;
+    }
+}
+ 
 static void virtio_net_device_realize(DeviceState *dev, Error **errp)
 {
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
@@ -2765,6 +2780,9 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
         n->host_features |= (1ULL << VIRTIO_NET_F_STANDBY);
         n->primary_device_timer = timer_new_ms(QEMU_CLOCK_VIRTUAL,
                                      virtio_net_primary_plug_timer, n);
+        n->change = qemu_add_vm_change_state_handler(
+                virtio_net_failover_migrate_cb, n);
+        
     }
 
     virtio_net_set_config_size(n, n->host_features);
@@ -2889,10 +2907,13 @@ static void virtio_net_device_unrealize(DeviceState *dev, Error **errp)
     g_free(n->mac_table.macs);
     g_free(n->vlans);
 
-    g_free(n->primary_device_id);
-    g_free(n->standby_id);
-    qobject_unref(n->primary_device_dict);
-    n->primary_device_dict = NULL;
+    if (n->failover) {
+        g_free(n->primary_device_id);
+        g_free(n->standby_id);
+        qobject_unref(n->primary_device_dict);
+        n->primary_device_dict = NULL;
+        qemu_del_vm_change_state_handler(n->change);
+    }
 
     max_queues = n->multiqueue ? n->max_queues : 1;
     for (i = 0; i < max_queues; i++) {
