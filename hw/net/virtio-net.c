@@ -36,6 +36,12 @@
 #include "trace.h"
 #include "monitor/qdev.h"
 #include "hw/pci/pci.h"
+#include <glib.h>
+#include <glib/gprintf.h>
+#include "qapi/qmp/qstring.h"
+#include "qapi/qmp/qnum.h"
+#include "include/qemu/cutils.h"
+#include "include/qapi/qmp/qbool.h"
 
 #define VIRTIO_NET_VM_VERSION    11
 
@@ -2941,6 +2947,50 @@ static void virtio_net_instance_init(Object *obj)
                                   DEVICE(n), NULL);
 }
 
+typedef struct PrimaryFromQdict {
+    char *prim_str;
+    Error **errp;
+} PrimaryFromQdict;
+
+static void primary_str_from_qdict_1(const char *key, QObject *obj,
+        void *opaque) {
+    PrimaryFromQdict *state = opaque;
+    char buf[32], *tmp = NULL;
+    const char *value;
+
+    if (!strcmp(key, "id") || *state->errp) {
+        return;
+    }
+
+    switch (qobject_type(obj)) {
+    case QTYPE_QSTRING:
+        value = qstring_get_str(qobject_to(QString, obj));
+        break;
+    case QTYPE_QNUM:
+        tmp = qnum_to_string(qobject_to(QNum, obj));
+        value = tmp;
+        break;
+    case QTYPE_QBOOL:
+        pstrcpy(buf, sizeof(buf),
+                qbool_get_bool(qobject_to(QBool, obj)) ? "on" : "off");
+        value = buf;
+        break;
+    default:
+        return;
+    }
+
+    state->prim_str = g_strconcat(state->prim_str, value, NULL);
+    g_free(tmp);
+}
+
+static char *qdict_to_string(const QDict *qdict)
+{
+    PrimaryFromQdict p;
+
+    qdict_iter(qdict, primary_str_from_qdict_1, &p);
+    return g_strdup(p.prim_str);
+}
+
 static int virtio_net_pre_save(void *opaque)
 {
     VirtIONet *n = opaque;
@@ -2948,6 +2998,8 @@ static int virtio_net_pre_save(void *opaque)
     /* At this point, backend must be stopped, otherwise
      * it might keep writing to memory. */
     assert(!n->vhost_started);
+
+    n->primary_str = qdict_to_string(n->primary_device_dict);
 
     return 0;
 }

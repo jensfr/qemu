@@ -192,6 +192,7 @@ struct VirtIONet {
     DeviceState *primary_dev;
     char *primary_device_id;
     char *standby_id;
+    char *primary_str;
     bool primary_should_be_hidden;
     bool failover;
     DeviceListener primary_listener;
