@@ -193,6 +193,7 @@ struct VirtIONet {
     char *primary_device_id;
     char *standby_id;
     char *primary_str;
+    uint8_t primary_str_buf[255];
     uint16_t primary_str_len;
     bool primary_should_be_hidden;
     bool failover;

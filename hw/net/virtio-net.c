@@ -2579,7 +2579,7 @@ static const VMStateDescription vmstate_virtio_net_device = {
          * but based on the uint.
          */
         VMSTATE_BUFFER_POINTER_UNSAFE(vlans, VirtIONet, 0, MAX_VLAN >> 3),
-        VMSTATE_BUFFER_POINTER_UNSAFE(primary_str, VirtIONet, 0, 255),
+        VMSTATE_BUFFER(primary_str_buf, VirtIONet),
         VMSTATE_UINT16(primary_str_len, VirtIONet),
         VMSTATE_WITH_TMP(VirtIONet, struct VirtIONetMigTmp,
                          vmstate_virtio_net_has_vnet),
@@ -3004,7 +3004,7 @@ static int virtio_net_pre_save(void *opaque)
     assert(!n->vhost_started);
 
     n->primary_str = qdict_to_string(n->primary_device_dict);
-    n->primary_str_len = strlen(n->primary_str);
+    n->primary_str_len = g_strlcpy((char *) n->primary_str_buf, n->primary_str, 255); 
 
     return 0;
 }
