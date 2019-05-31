@@ -2579,6 +2579,8 @@ static const VMStateDescription vmstate_virtio_net_device = {
          * but based on the uint.
          */
         VMSTATE_BUFFER_POINTER_UNSAFE(vlans, VirtIONet, 0, MAX_VLAN >> 3),
+        VMSTATE_BUFFER_POINTER_UNSAFE(primary_str, VirtIONet, 0, 255),
+        VMSTATE_UINT16(primary_str_len, VirtIONet),
         VMSTATE_WITH_TMP(VirtIONet, struct VirtIONetMigTmp,
                          vmstate_virtio_net_has_vnet),
         VMSTATE_UINT8(mac_table.multi_overflow, VirtIONet),
@@ -2949,7 +2951,7 @@ static void virtio_net_instance_init(Object *obj)
 
 typedef struct PrimaryFromQdict {
     char *prim_str;
-    Error **errp;
+    Error *errp;
 } PrimaryFromQdict;
 
 static void primary_str_from_qdict_1(const char *key, QObject *obj,
@@ -2958,7 +2960,7 @@ static void primary_str_from_qdict_1(const char *key, QObject *obj,
     char buf[32], *tmp = NULL;
     const char *value;
 
-    if (!strcmp(key, "id") || *state->errp) {
+    if (!strcmp(key, "driver")) {
         return;
     }
 
@@ -2979,7 +2981,8 @@ static void primary_str_from_qdict_1(const char *key, QObject *obj,
         return;
     }
 
-    state->prim_str = g_strconcat(state->prim_str, value, NULL);
+    /* driver key needs special treatment, come first, FIXME */
+    state->prim_str = g_strconcat(state->prim_str, ",", key, "=", value, NULL);
     g_free(tmp);
 }
 
@@ -2987,6 +2990,7 @@ static char *qdict_to_string(const QDict *qdict)
 {
     PrimaryFromQdict p;
 
+    p.prim_str = g_strdup("vfio-pci,");
     qdict_iter(qdict, primary_str_from_qdict_1, &p);
     return g_strdup(p.prim_str);
 }
@@ -3000,6 +3004,7 @@ static int virtio_net_pre_save(void *opaque)
     assert(!n->vhost_started);
 
     n->primary_str = qdict_to_string(n->primary_device_dict);
+    n->primary_str_len = strlen(n->primary_str);
 
     return 0;
 }
