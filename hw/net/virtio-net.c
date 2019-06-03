@@ -2737,13 +2737,16 @@ static void virtio_net_failover_migrate_cb(void *opaque, int running,
                                       RunState state)
 {
     VirtIONet *n = opaque;
+    QemuOpts *opts = NULL;
 
     if (!running) {
         return;
     }
 
     if (n->old_runstate == RUN_STATE_INMIGRATE) {
-        /* migration is over unplug */
+        opts = qemu_opts_parse(qemu_find_opts("device"),
+                n->primary_str, true, NULL); 
+        n->primary_dev = qdev_device_add(opts, NULL);
         return;
     }
 }
