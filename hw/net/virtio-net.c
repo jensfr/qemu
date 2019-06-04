@@ -2993,7 +2993,7 @@ static char *qdict_to_string(const QDict *qdict)
 {
     PrimaryFromQdict p;
 
-    p.prim_str = g_strdup("vfio-pci,");
+    p.prim_str = g_strdup("driver=vfio-pci,");
     qdict_iter(qdict, primary_str_from_qdict_1, &p);
     return g_strdup(p.prim_str);
 }
