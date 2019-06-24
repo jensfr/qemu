@@ -838,8 +838,10 @@ static void vfio_pci_load_rom(VFIOPCIDevice *vdev)
         return;
     }
 
-    vdev->rom = g_malloc(size);
-    memset(vdev->rom, 0xff, size);
+    if (!vdev->partially_unplug) {
+        vdev->rom = g_malloc(size);
+        memset(vdev->rom, 0xff, size);
+    }
 
     while (size) {
         bytes = pread(vdev->vbasedev.fd, vdev->rom + off,
@@ -2939,14 +2941,15 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         goto error;
     }
 
-    /* vfio emulates a lot for us, but some bits need extra love */
-    vdev->emulated_config_bits = g_malloc0(vdev->config_size);
+    if (!vdev->partially_unplug) {
+        /* vfio emulates a lot for us, but some bits need extra love */
+        vdev->emulated_config_bits = g_malloc0(vdev->config_size);
 
-    /* QEMU can choose to expose the ROM or not */
-    memset(vdev->emulated_config_bits + PCI_ROM_ADDRESS, 0xff, 4);
-    /* QEMU can also add or extend BARs */
-    memset(vdev->emulated_config_bits + PCI_BASE_ADDRESS_0, 0xff, 6 * 4);
-
+        /* QEMU can choose to expose the ROM or not */
+        memset(vdev->emulated_config_bits + PCI_ROM_ADDRESS, 0xff, 4);
+        /* QEMU can also add or extend BARs */
+        memset(vdev->emulated_config_bits + PCI_BASE_ADDRESS_0, 0xff, 6 * 4);
+    }
     /*
      * The PCI spec reserves vendor ID 0xffff as an invalid value.  The
      * device ID is managed by the vendor and need only be a 16-bit value.
@@ -2996,8 +2999,10 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
     }
 
     /* QEMU can change multi-function devices to single function, or reverse */
-    vdev->emulated_config_bits[PCI_HEADER_TYPE] =
-                                              PCI_HEADER_TYPE_MULTI_FUNCTION;
+    if (vdev->partially_unplug) {
+        vdev->emulated_config_bits[PCI_HEADER_TYPE] =
+                                                  PCI_HEADER_TYPE_MULTI_FUNCTION;
+    }
 
     /* Restore or clear multifunction, this is always controlled by QEMU */
     if (vdev->pdev.cap_present & QEMU_PCI_CAP_MULTIFUNCTION) {
@@ -3016,7 +3021,9 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
 
     vfio_pci_size_rom(vdev);
 
-    vfio_bars_prepare(vdev);
+    if (vdev->partially_unplug) {
+        vfio_bars_prepare(vdev);
+    }
 
     vfio_msix_early_setup(vdev, &err);
     if (err) {
@@ -3024,7 +3031,9 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         goto error;
     }
 
-    vfio_bars_register(vdev);
+    if (vdev->partially_unplug) {
+        vfio_bars_register(vdev);
+    }
 
     ret = vfio_add_capabilities(vdev, errp);
     if (ret) {
@@ -3087,7 +3096,7 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         }
     }
 
-    if (vdev->display != ON_OFF_AUTO_OFF) {
+    if (vdev->display != ON_OFF_AUTO_OFF && !vdev->partially_unplug) {
         ret = vfio_display_probe(vdev, errp);
         if (ret) {
             goto out_teardown;
@@ -3136,10 +3145,14 @@ error:
     error_prepend(errp, VFIO_MSG_PREFIX, vdev->vbasedev.name);
 }
 
+/*release?*/
 static void vfio_instance_finalize(Object *obj)
 {
     VFIOPCIDevice *vdev = PCI_VFIO(obj);
     VFIOGroup *group = vdev->vbasedev.group;
+
+    if (vdev->partially_unplug)
+        return;
 
     vfio_display_finalize(vdev);
     vfio_bars_finalize(vdev);
@@ -3156,6 +3169,7 @@ static void vfio_instance_finalize(Object *obj)
     vfio_put_group(group);
 }
 
+/*unplug*/
 static void vfio_exitfn(PCIDevice *pdev)
 {
     VFIOPCIDevice *vdev = PCI_VFIO(pdev);
