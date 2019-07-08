@@ -948,6 +948,9 @@ static void fill_source_migration_info(MigrationInfo *info)
     case MIGRATION_STATUS_CANCELLED:
         info->has_status = true;
         break;
+    case MIGRATION_STATUS_WAIT_UNPLUG:
+        info->has_status = true;
+        break;
     }
     info->status = s->state;
 }
@@ -1682,6 +1685,7 @@ bool migration_is_idle(void)
     case MIGRATION_STATUS_COLO:
     case MIGRATION_STATUS_PRE_SWITCHOVER:
     case MIGRATION_STATUS_DEVICE:
+    case MIGRATION_STATUS_WAIT_UNPLUG:
         return false;
     case MIGRATION_STATUS__MAX:
         g_assert_not_reached();
@@ -3198,6 +3202,9 @@ static void *migration_thread(void *opaque)
     int64_t setup_start = qemu_clock_get_ms(QEMU_CLOCK_HOST);
     MigThrError thr_error;
     bool urgent = false;
+    int ms;
+    int64_t my_current_time;
+    int r;
 
     rcu_register_thread();
 
@@ -3233,6 +3240,22 @@ static void *migration_thread(void *opaque)
     }
 
     qemu_savevm_state_setup(s->to_dst_file);
+
+    migrate_set_state(&s->state, MIGRATION_STATUS_SETUP,
+                      MIGRATION_STATUS_WAIT_UNPLUG);
+    my_current_time = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
+    ms = s->iteration_start_time + BUFFER_DELAY - my_current_time;
+    while (qemu_sem_timedwait(&s->wait_unplug_sem, ms) != 0 &&
+           s->state == MIGRATION_STATUS_WAIT_UNPLUG) {
+        r = qemu_savevm_state_guest_unplug_pending();
+        if (r != 1) {
+            break;
+        }
+        fprintf(stderr, "mig unplug loop iteration\n");
+    }
+    migrate_set_state(&s->state, MIGRATION_STATUS_WAIT_UNPLUG,
+                      MIGRATION_STATUS_ACTIVE);
+
 
     s->setup_time = qemu_clock_get_ms(QEMU_CLOCK_HOST) - setup_start;
     migrate_set_state(&s->state, MIGRATION_STATUS_SETUP,
@@ -3481,6 +3504,7 @@ static void migration_instance_finalize(Object *obj)
     qemu_mutex_destroy(&ms->qemu_file_lock);
     g_free(params->tls_hostname);
     g_free(params->tls_creds);
+    qemu_sem_destroy(&ms->wait_unplug_sem);
     qemu_sem_destroy(&ms->rate_limit_sem);
     qemu_sem_destroy(&ms->pause_sem);
     qemu_sem_destroy(&ms->postcopy_pause_sem);
@@ -3526,6 +3550,7 @@ static void migration_instance_init(Object *obj)
     qemu_sem_init(&ms->postcopy_pause_rp_sem, 0);
     qemu_sem_init(&ms->rp_state.rp_sem, 0);
     qemu_sem_init(&ms->rate_limit_sem, 0);
+    qemu_sem_init(&ms->wait_unplug_sem, 0);
     qemu_mutex_init(&ms->qemu_file_lock);
 }
 
