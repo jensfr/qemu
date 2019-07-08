@@ -1113,6 +1113,25 @@ void qemu_savevm_state_header(QEMUFile *f)
     }
 }
 
+int qemu_savevm_state_guest_unplug_pending(void)
+{
+    SaveStateEntry *se;
+    bool ret = false;
+
+
+    QTAILQ_FOREACH(se, &savevm_state.handlers, entry) {
+        if (!se->vmsd || !se->vmsd->dev_unplug_pending) {
+            continue;
+        }
+        ret = se->vmsd->dev_unplug_pending(se->opaque);
+        if (!ret) {
+            break;
+        }
+    }
+
+    return !!ret;
+}
+
 void qemu_savevm_state_setup(QEMUFile *f)
 {
     SaveStateEntry *se;
