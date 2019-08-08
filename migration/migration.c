@@ -3187,6 +3187,8 @@ static void *migration_thread(void *opaque)
     int64_t setup_start = qemu_clock_get_ms(QEMU_CLOCK_HOST);
     MigThrError thr_error;
     bool urgent = false;
+    int ms;
+    int64_t my_current_time;
 
     rcu_register_thread();
 
@@ -3225,8 +3227,18 @@ static void *migration_thread(void *opaque)
 
     migrate_set_state(&s->state, MIGRATION_STATUS_SETUP,
                       MIGRATION_STATUS_WAIT_UNPLUG);
-    while (qemu_savevm_state_guest_unplug_pending()) {
-        continue;
+    my_current_time = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
+    ms = s->iteration_start_time + BUFFER_DELAY - my_current_time;
+    /* TODOS:
+     * - check for change of migration state (could get cancelled)
+     * and check what happens in cancellation code
+     * - optimize by checking nr of pending devices before loop
+     * - debug why s-state can be ACTIVE here, as seen in gdb */ 
+    while (qemu_sem_timedwait(&s->wait_unplug_sem, ms) != 0 &&
+           s->state == MIGRATION_STATUS_SETUP) {
+        if (qemu_savevm_state_guest_unplug_pending() == 0)
+            break;
+        fprintf(stderr, "mig unplug loop iteration\n");
     }
     migrate_set_state(&s->state, MIGRATION_STATUS_WAIT_UNPLUG,
                       MIGRATION_STATUS_ACTIVE); 
@@ -3476,6 +3488,7 @@ static void migration_instance_finalize(Object *obj)
     qemu_mutex_destroy(&ms->qemu_file_lock);
     g_free(params->tls_hostname);
     g_free(params->tls_creds);
+    qemu_sem_destroy(&ms->wait_unplug_sem);
     qemu_sem_destroy(&ms->rate_limit_sem);
     qemu_sem_destroy(&ms->pause_sem);
     qemu_sem_destroy(&ms->postcopy_pause_sem);
@@ -3521,6 +3534,7 @@ static void migration_instance_init(Object *obj)
     qemu_sem_init(&ms->postcopy_pause_rp_sem, 0);
     qemu_sem_init(&ms->rp_state.rp_sem, 0);
     qemu_sem_init(&ms->rate_limit_sem, 0);
+    qemu_sem_init(&ms->wait_unplug_sem, 0);
     qemu_mutex_init(&ms->qemu_file_lock);
 }
 
