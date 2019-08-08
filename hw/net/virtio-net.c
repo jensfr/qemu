@@ -2679,30 +2679,30 @@ static bool failover_unplug_primary(VirtIONet *n)
     return true;
 }
 
-static bool failover_replug_primary(VirtIONet *n, Error *err)
+static bool failover_replug_primary(VirtIONet *n, Error **errp)
 {
     HotplugHandler *hotplug_ctrl;
 
     if (!n->primary_device_opts) {
         n->primary_device_opts = qemu_opts_from_qdict(
                 qemu_find_opts("device"),
-                n->primary_device_dict, &err);
+                n->primary_device_dict, errp);
     }
     if (n->primary_device_opts) {
         qdev_set_parent_bus(n->primary_dev, n->primary_bus);
         n->primary_should_be_hidden = false;
         qemu_opt_set_bool(n->primary_device_opts,
-                "partially_hotplugged", true, &err);
+                "partially_hotplugged", true, errp);
         hotplug_ctrl = qdev_get_hotplug_handler(n->primary_dev);
         if (hotplug_ctrl) {
-            hotplug_handler_pre_plug(hotplug_ctrl, n->primary_dev, &err);
-            hotplug_handler_plug(hotplug_ctrl, n->primary_dev, &err);
+            hotplug_handler_pre_plug(hotplug_ctrl, n->primary_dev, errp);
+            hotplug_handler_plug(hotplug_ctrl, n->primary_dev, errp);
         }
         if (!n->primary_dev) {
-            error_setg(&err, "virtio_net: couldn't find primary device");
+            error_setg(errp, "virtio_net: couldn't find primary device");
         }
     }
-    return err != NULL;
+    return errp != NULL;
 }
 
 static void virtio_net_handle_migration_primary(VirtIONet *n,
@@ -2730,7 +2730,7 @@ static void virtio_net_handle_migration_primary(VirtIONet *n,
         }
     } else if (migration_has_failed(s)) {
         /* We already unplugged the device let's plugged it back */
-        if (!failover_replug_primary(n, err)) {
+        if (!failover_replug_primary(n, &err)) {
             error_report_err(err);
         }
     }
