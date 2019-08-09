@@ -2682,7 +2682,10 @@ static bool failover_unplug_primary(VirtIONet *n)
 static bool failover_replug_primary(VirtIONet *n, Error **errp)
 {
     HotplugHandler *hotplug_ctrl;
+    PCIDevice *pdev = PCI_DEVICE(n->primary_dev);
 
+    if (!pdev->partially_hotplugged)     
+        return true;
     if (!n->primary_device_opts) {
         n->primary_device_opts = qemu_opts_from_qdict(
                 qemu_find_opts("device"),
@@ -2702,7 +2705,7 @@ static bool failover_replug_primary(VirtIONet *n, Error **errp)
             error_setg(errp, "virtio_net: couldn't find primary device");
         }
     }
-    return errp != NULL;
+    return *errp != NULL;
 }
 
 static void virtio_net_handle_migration_primary(VirtIONet *n,
@@ -2744,31 +2747,54 @@ static void migration_state_notifier(Notifier *notifier, void *data)
 }
 
 static void virtio_net_primary_should_be_hidden(DeviceListener *listener,
-            QemuOpts *device_opts, bool *match_found, bool *res)
+            QemuOpts *device_opts, bool *match_found, bool *hide)
 {
     VirtIONet *n = container_of(listener, VirtIONet, primary_listener);
 
-    if (device_opts) {
-        n->primary_device_dict = qemu_opts_to_qdict(device_opts,
-                n->primary_device_dict);
-        n->primary_device_opts = device_opts;
+    n->primary_device_dict = qemu_opts_to_qdict(device_opts,
+            n->primary_device_dict);
+    if (n->primary_device_dict) {
+        g_free(n->standby_id);
+        n->standby_id = g_strdup(qdict_get_try_str(n->primary_device_dict,
+                    "standby"));
+    } else {
+        error_report("virtio_net: couldn't set standby_id");
     }
-    g_free(n->standby_id);
-    n->standby_id = g_strdup(qdict_get_try_str(n->primary_device_dict,
-                             "standby"));
-    if (n->standby_id) {
+
+    if (device_opts && g_strcmp0(n->standby_id, n->netclient_name) == 0) {
         *match_found = true;
+    } else {
+        *match_found = false;
+        *hide = false;
+        g_free(n->standby_id);
+        n->primary_device_dict = NULL;
+        return;
     }
+
+    n->primary_device_opts = device_opts;
+
     /* primary_should_be_hidden is set during feature negotiation */
-    if (atomic_read(&n->primary_should_be_hidden) && *match_found) {
-        *res = true;
-    } else if (*match_found)  {
-        n->primary_device_dict = qemu_opts_to_qdict(device_opts,
-                n->primary_device_dict);
-        *res = false;
+    *hide = atomic_read(&n->primary_should_be_hidden);
+/*
+    if (atomic_read(&n->primary_should_be_hidden)) {
+        *hide = true;
+    } else {
+        //n->primary_device_dict = qemu_opts_to_qdict(device_opts,
+                //n->primary_device_dict);
+        *hide = false;
     }
-    g_free(n->primary_device_id);
-    n->primary_device_id = g_strdup(device_opts->id);
+*/
+    if (n->primary_device_dict) {
+        g_free(n->primary_device_id);
+        n->primary_device_id = g_strdup(qdict_get_try_str(n->primary_device_dict,
+                    "id"));
+        if (!n->primary_device_id) {
+            error_report("set primary_device_id NULL\n");
+        }
+    } else {
+        error_report("virtio_net: couldn't set primary_device_id");
+    }
+    //n->primary_device_id = g_strdup(device_opts->id);
 }
 
 static void virtio_net_device_realize(DeviceState *dev, Error **errp)
