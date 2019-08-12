@@ -2783,6 +2783,7 @@ static void virtio_net_primary_should_be_hidden(DeviceListener *listener,
         if (!n->primary_device_id) {
             error_report("set primary_device_id NULL\n");
         }
+    }
 }
 
 static int is_my_primary(void *opaque, QemuOpts *opts, Error **errp)
@@ -2825,7 +2826,7 @@ static void virtio_connect_failover_devices(VirtIONet *n, DeviceState *dev)
         n->primary_device_id = g_strdup(prim_dev->id);
         n->primary_device_opts = prim_dev->opts;
     } else {
-        warn_error("virtio_net: Could not find primary device");
+        warn_report("virtio_net: Could not find primary device");
     }
 }
 
