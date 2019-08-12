@@ -3235,7 +3235,7 @@ static void *migration_thread(void *opaque)
      * - optimize by checking nr of pending devices before loop
      * - debug why s-state can be ACTIVE here, as seen in gdb */ 
     while (qemu_sem_timedwait(&s->wait_unplug_sem, ms) != 0 &&
-           s->state == MIGRATION_STATUS_SETUP) {
+           s->state == MIGRATION_STATUS_WAIT_UNPLUG) {
         if (qemu_savevm_state_guest_unplug_pending() == 0)
             break;
         fprintf(stderr, "mig unplug loop iteration\n");

@@ -2684,7 +2684,7 @@ static bool failover_replug_primary(VirtIONet *n, Error **errp)
     HotplugHandler *hotplug_ctrl;
     PCIDevice *pdev = PCI_DEVICE(n->primary_dev);
 
-    if (!pdev->partially_hotplugged)     
+    if (!pdev->partially_hotplugged)
         return true;
     if (!n->primary_device_opts) {
         n->primary_device_opts = qemu_opts_from_qdict(
@@ -2717,7 +2717,7 @@ static void virtio_net_handle_migration_primary(VirtIONet *n,
     should_be_hidden = atomic_read(&n->primary_should_be_hidden);
 
     if (!n->primary_dev) {
-        error_report("virtio_net: couldn't find primary device");
+        warn_report("virtio_net: couldn't find primary device");
         return;
     }
 
@@ -2729,7 +2729,7 @@ static void virtio_net_handle_migration_primary(VirtIONet *n,
             qapi_event_send_unplug_primary(n->primary_device_id);
             atomic_set(&n->primary_should_be_hidden, true);
         } else {
-            error_report("virtio_net: Couldn't unplug primary device");
+            warn_report("virtio_net: Couldn't unplug primary device");
         }
     } else if (migration_has_failed(s)) {
         /* We already unplugged the device let's plugged it back */
@@ -2739,7 +2739,7 @@ static void virtio_net_handle_migration_primary(VirtIONet *n,
     }
 }
 
-static void migration_state_notifier(Notifier *notifier, void *data)
+static void virtio_net_migration_state_notifier(Notifier *notifier, void *data)
 {
     MigrationState *s = data;
     VirtIONet *n = container_of(notifier, VirtIONet, migration_state);
@@ -2758,7 +2758,7 @@ static void virtio_net_primary_should_be_hidden(DeviceListener *listener,
         n->standby_id = g_strdup(qdict_get_try_str(n->primary_device_dict,
                     "standby"));
     } else {
-        error_report("virtio_net: couldn't set standby_id");
+        warn_report("virtio_net: couldn't set standby_id");
     }
 
     if (device_opts && g_strcmp0(n->standby_id, n->netclient_name) == 0) {
@@ -2775,15 +2775,7 @@ static void virtio_net_primary_should_be_hidden(DeviceListener *listener,
 
     /* primary_should_be_hidden is set during feature negotiation */
     *hide = atomic_read(&n->primary_should_be_hidden);
-/*
-    if (atomic_read(&n->primary_should_be_hidden)) {
-        *hide = true;
-    } else {
-        //n->primary_device_dict = qemu_opts_to_qdict(device_opts,
-                //n->primary_device_dict);
-        *hide = false;
-    }
-*/
+
     if (n->primary_device_dict) {
         g_free(n->primary_device_id);
         n->primary_device_id = g_strdup(qdict_get_try_str(n->primary_device_dict,
@@ -2791,10 +2783,50 @@ static void virtio_net_primary_should_be_hidden(DeviceListener *listener,
         if (!n->primary_device_id) {
             error_report("set primary_device_id NULL\n");
         }
-    } else {
-        error_report("virtio_net: couldn't set primary_device_id");
+}
+
+static int is_my_primary(void *opaque, QemuOpts *opts, Error **errp)
+{
+    VirtIONet *n = opaque;
+    int ret = 0;
+
+    const char *standby_id = qemu_opt_get(opts, "standby");
+
+    if (standby_id != NULL && (g_strcmp0(standby_id, n->netclient_name) == 0)) {
+        n->primary_device_id = g_strdup(opts->id);
+        ret = 1;
     }
-    //n->primary_device_id = g_strdup(device_opts->id);
+
+    return ret;
+}
+
+static DeviceState *virtio_net_find_primary(VirtIONet *n, Error *err)
+{
+    DeviceState *dev = NULL;
+
+    if (qemu_opts_foreach(qemu_find_opts("device"),
+                         is_my_primary, n, &err)) {
+        dev = qdev_find_recursive(sysbus_get_default(), n->primary_device_id);
+    }
+    return dev;
+}
+
+static void virtio_connect_failover_devices(VirtIONet *n, DeviceState *dev)
+{
+    DeviceState *prim_dev = NULL;
+    Error *err = NULL;
+
+    if (n->primary_device_dict || n->primary_device_opts) {
+        return;
+    }
+
+    prim_dev = virtio_net_find_primary(n, err);
+    if (prim_dev) {
+        n->primary_device_id = g_strdup(prim_dev->id);
+        n->primary_device_opts = prim_dev->opts;
+    } else {
+        warn_error("virtio_net: Could not find primary device");
+    }
 }
 
 static void virtio_net_device_realize(DeviceState *dev, Error **errp)
@@ -2828,11 +2860,12 @@ static void virtio_net_device_realize(DeviceState *dev, Error **errp)
     }
 
     if (n->failover) {
+        virtio_connect_failover_devices(n, dev);
         n->primary_listener.should_be_hidden =
             virtio_net_primary_should_be_hidden;
         atomic_set(&n->primary_should_be_hidden, true);
         device_listener_register(&n->primary_listener);
-        n->migration_state.notify = migration_state_notifier;
+        n->migration_state.notify = virtio_net_migration_state_notifier;
         add_migration_state_change_notifier(&n->migration_state);
         n->host_features |= (1ULL << VIRTIO_NET_F_STANDBY);
     }
@@ -3005,9 +3038,11 @@ static int virtio_net_pre_save(void *opaque)
 
 static bool primary_unplug_pending(void *opaque)
 {
-    VirtIONet *n = opaque;
+    DeviceState *dev = opaque;
+    VirtIODevice *vdev = VIRTIO_DEVICE(dev);
+    VirtIONet *n = VIRTIO_NET(vdev);
 
-    return n ? n->primary_dev->pending_deleted_event : false;
+    return n->primary_dev ? n->primary_dev->pending_deleted_event : false;
 }
 
 static bool dev_unplug_pending(void *opaque)
