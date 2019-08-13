@@ -2756,9 +2756,9 @@ static void virtio_net_primary_should_be_hidden(DeviceListener *listener,
     if (n->primary_device_dict) {
         g_free(n->standby_id);
         n->standby_id = g_strdup(qdict_get_try_str(n->primary_device_dict,
-                    "standby"));
+                    "net_failover_pair_id"));
     } else {
-        warn_report("virtio_net: couldn't set standby_id");
+        warn_report("virtio_net: couldn't set id of failover standby device id");
     }
 
     if (device_opts && g_strcmp0(n->standby_id, n->netclient_name) == 0) {
@@ -2791,7 +2791,7 @@ static int is_my_primary(void *opaque, QemuOpts *opts, Error **errp)
     VirtIONet *n = opaque;
     int ret = 0;
 
-    const char *standby_id = qemu_opt_get(opts, "standby");
+    const char *standby_id = qemu_opt_get(opts, "net_failover_pair_id");
 
     if (standby_id != NULL && (g_strcmp0(standby_id, n->netclient_name) == 0)) {
         n->primary_device_id = g_strdup(opts->id);
@@ -3043,7 +3043,14 @@ static bool primary_unplug_pending(void *opaque)
     VirtIODevice *vdev = VIRTIO_DEVICE(dev);
     VirtIONet *n = VIRTIO_NET(vdev);
 
-    return n->primary_dev ? n->primary_dev->pending_deleted_event : false;
+    if (n->primary_dev) {
+        if (n->primary_dev->pending_deleted_event)
+            return true;
+        else
+            return false;
+    }
+    //return n->primary_dev ? n->primary_dev->pending_deleted_event : false;
+    return false;
 }
 
 static bool dev_unplug_pending(void *opaque)

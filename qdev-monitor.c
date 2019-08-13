@@ -566,7 +566,7 @@ void qdev_set_id(DeviceState *dev, const char *id)
 static int is_failover_device(void *opaque, const char *name, const char *value,
                         Error **errp)
 {
-    if (strcmp(name, "standby") == 0) {
+    if (strcmp(name, "net_failover_pair_id") == 0) {
         QemuOpts *opts = (QemuOpts *)opaque;
 
         if (qdev_should_hide_device(opts, errp) && errp && !*errp) {

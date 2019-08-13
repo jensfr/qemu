@@ -3189,6 +3189,7 @@ static void *migration_thread(void *opaque)
     bool urgent = false;
     int ms;
     int64_t my_current_time;
+    int r;
 
     rcu_register_thread();
 
@@ -3236,8 +3237,10 @@ static void *migration_thread(void *opaque)
      * - debug why s-state can be ACTIVE here, as seen in gdb */ 
     while (qemu_sem_timedwait(&s->wait_unplug_sem, ms) != 0 &&
            s->state == MIGRATION_STATUS_WAIT_UNPLUG) {
-        if (qemu_savevm_state_guest_unplug_pending() == 0)
+        r = qemu_savevm_state_guest_unplug_pending();
+        if (r != 1) {
             break;
+        }
         fprintf(stderr, "mig unplug loop iteration\n");
     }
     migrate_set_state(&s->state, MIGRATION_STATUS_WAIT_UNPLUG,
