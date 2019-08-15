@@ -216,6 +216,7 @@ bool qdev_should_hide_device(QemuOpts *opts, Error **errp)
 {
     bool res = false;
     bool match_found = false;
+    int i = 0;
 
     DeviceListener *listener;
 
@@ -223,10 +224,14 @@ bool qdev_should_hide_device(QemuOpts *opts, Error **errp)
        if (listener->should_be_hidden) {
             listener->should_be_hidden(listener, opts, &match_found, &res);
         }
+        i++;
 
         if (match_found) {
             break;
         }
+    }
+    if (i == 0) {
+        res = true;
     }
     return res;
 }
