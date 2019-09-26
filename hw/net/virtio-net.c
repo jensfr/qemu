@@ -769,6 +769,49 @@ static void failover_add_primary(VirtIONet *n)
     }
 }
 
+static int is_my_primary(void *opaque, QemuOpts *opts, Error **errp)
+{
+    VirtIONet *n = opaque;
+    int ret = 0;
+
+    const char *standby_id = qemu_opt_get(opts, "net_failover_pair_id");
+
+    if (standby_id != NULL && (g_strcmp0(standby_id, n->netclient_name) == 0)) {
+        n->primary_device_id = g_strdup(opts->id);
+        ret = 1;
+    }
+
+    return ret;
+}
+
+static DeviceState *virtio_net_find_primary(VirtIONet *n, Error *err)
+{
+    DeviceState *dev = NULL;
+
+    if (qemu_opts_foreach(qemu_find_opts("device"),
+                         is_my_primary, n, &err)) {
+        dev = qdev_find_recursive(sysbus_get_default(), n->primary_device_id);
+    }
+    return dev;
+}
+
+
+
+static DeviceState *virtio_connect_failover_devices(VirtIONet *n, DeviceState *dev)
+{
+    DeviceState *prim_dev = NULL;
+    Error *err = NULL;
+
+    prim_dev = virtio_net_find_primary(n, err);
+    if (prim_dev) {
+        n->primary_device_id = g_strdup(prim_dev->id);
+        n->primary_device_opts = prim_dev->opts;
+    } else {
+        warn_report("connect: virtio_net: Could not find primary device");
+    }
+
+    return prim_dev;
+}
 
 static void virtio_net_set_features(VirtIODevice *vdev, uint64_t features)
 {
@@ -818,6 +861,17 @@ static void virtio_net_set_features(VirtIODevice *vdev, uint64_t features)
     if (virtio_has_feature(features, VIRTIO_NET_F_STANDBY)) {
         atomic_set(&n->primary_should_be_hidden, false);
         failover_add_primary(n);
+        if (!n->primary_dev) {
+            n->primary_dev = virtio_connect_failover_devices(n, n->qdev);
+            if (!n->primary_dev) {
+                failover_add_primary(n);
+                n->primary_dev = virtio_connect_failover_devices(n, n->qdev);
+                if (!n->primary_dev) {
+			warn_report("set_features: virtio_net: couldn't find "
+					"primary device");
+                }
+            }
+        }
     }
 }
 
@@ -2710,49 +2764,6 @@ static bool failover_replug_primary(VirtIONet *n, Error **errp)
     return *errp != NULL;
 }
 
-static int is_my_primary(void *opaque, QemuOpts *opts, Error **errp)
-{
-    VirtIONet *n = opaque;
-    int ret = 0;
-
-    const char *standby_id = qemu_opt_get(opts, "net_failover_pair_id");
-
-    if (standby_id != NULL && (g_strcmp0(standby_id, n->netclient_name) == 0)) {
-        n->primary_device_id = g_strdup(opts->id);
-        ret = 1;
-    }
-
-    return ret;
-}
-
-static DeviceState *virtio_net_find_primary(VirtIONet *n, Error *err)
-{
-    DeviceState *dev = NULL;
-
-    if (qemu_opts_foreach(qemu_find_opts("device"),
-                         is_my_primary, n, &err)) {
-        dev = qdev_find_recursive(sysbus_get_default(), n->primary_device_id);
-    }
-    return dev;
-}
-
-
-static DeviceState *virtio_connect_failover_devices(VirtIONet *n, DeviceState *dev)
-{
-    DeviceState *prim_dev = NULL;
-    Error *err = NULL;
-
-    prim_dev = virtio_net_find_primary(n, err);
-    if (prim_dev) {
-        n->primary_device_id = g_strdup(prim_dev->id);
-        n->primary_device_opts = prim_dev->opts;
-    } else {
-        warn_report("virtio_net: Could not find primary device");
-    }
-
-    return prim_dev;
-}
-
 static void virtio_net_handle_migration_primary(VirtIONet *n,
                                                 MigrationState *s)
 {
@@ -2764,7 +2775,7 @@ static void virtio_net_handle_migration_primary(VirtIONet *n,
     if (!n->primary_dev) {
         n->primary_dev = virtio_connect_failover_devices(n, n->qdev);
         if (!n->primary_dev) {
-            warn_report("virtio_net: couldn't find primary device");
+            warn_report("handle_migration: virtio_net: couldn't find primary device");
             return;
         }
     }
