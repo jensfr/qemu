@@ -3270,7 +3270,7 @@ static void *migration_thread(void *opaque)
     migrate_set_state(&s->state, MIGRATION_STATUS_SETUP,
                       MIGRATION_STATUS_WAIT_UNPLUG);
     my_current_time = qemu_clock_get_ms(QEMU_CLOCK_REALTIME);
-    ms = s->iteration_start_time + BUFFER_DELAY - my_current_time;
+    ms = s->iteration_start_time + 500 - my_current_time;
     while (qemu_sem_timedwait(&s->wait_unplug_sem, ms) != 0 &&
            s->state == MIGRATION_STATUS_WAIT_UNPLUG) {
         r = qemu_savevm_state_guest_unplug_pending();
