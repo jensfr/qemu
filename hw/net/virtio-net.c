@@ -2793,7 +2793,9 @@ static void virtio_net_handle_migration_primary(VirtIONet *n,
     } else if (migration_has_failed(s)) {
         /* We already unplugged the device let's plugged it back */
         if (!failover_replug_primary(n, &err)) {
-            error_report_err(err);
+            if (err) {
+                error_report_err(err);
+            }
         }
     }
 }
