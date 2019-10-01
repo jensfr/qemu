@@ -793,7 +793,12 @@ static DeviceState *virtio_net_find_primary(VirtIONet *n, Error *err)
 
     if (qemu_opts_foreach(qemu_find_opts("device"),
                          is_my_primary, n, &err)) {
-        dev = qdev_find_recursive(sysbus_get_default(), n->primary_device_id);
+        if (n->primary_device_id) {
+            dev = qdev_find_recursive(sysbus_get_default(),
+                    n->primary_device_id);
+        } else {
+            return NULL;
+        }
     }
     return dev;
 }
