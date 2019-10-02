@@ -768,6 +768,10 @@ static void failover_add_primary(VirtIONet *n)
         }
     }
     if (err) {
+        if (n->primary_dev != NULL) {
+            qdev_unplug(n->primary_dev, &err);
+        }
+
         error_report_err(err);
     }
 }
