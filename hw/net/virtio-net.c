@@ -763,15 +763,19 @@ static void failover_add_primary(VirtIONet *n)
             n->primary_device_id);
     if (n->primary_device_opts) {
         n->primary_dev = qdev_device_add(n->primary_device_opts, &err);
+        if (err) {
+            qemu_opts_del(n->primary_device_opts);
+        }
         if (n->primary_dev) {
             n->primary_bus = n->primary_dev->parent_bus;
+            if (err) {
+                qdev_unplug(n->primary_dev, &err);
+                qdev_set_id(n->primary_dev, "");
+
+            }
         }
     }
     if (err) {
-        if (n->primary_dev != NULL) {
-            qdev_unplug(n->primary_dev, &err);
-        }
-
         error_report_err(err);
     }
 }
