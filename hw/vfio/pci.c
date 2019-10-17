@@ -2835,7 +2835,7 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         goto error;
     }
 
-    if (vdev->net_failover_pair_id != NULL) {
+    if (pdev->net_failover_pair_id != NULL) {
         class_id = pci_get_word(pdev->config + PCI_CLASS_DEVICE);
         if (class_id != PCI_CLASS_NETWORK_ETHERNET) {
             error_setg(errp, "failover device is not an Ethernet device");
@@ -3141,8 +3141,6 @@ static Property vfio_pci_dev_properties[] = {
                             display, ON_OFF_AUTO_OFF),
     DEFINE_PROP_UINT32("xres", VFIOPCIDevice, display_xres, 0),
     DEFINE_PROP_UINT32("yres", VFIOPCIDevice, display_yres, 0),
-    DEFINE_PROP_STRING("net_failover_pair_id", VFIOPCIDevice,
-            net_failover_pair_id),
     DEFINE_PROP_UINT32("x-intx-mmap-timeout-ms", VFIOPCIDevice,
                        intx.mmap_timeout, 1100),
     DEFINE_PROP_BIT("x-vga", VFIOPCIDevice, features,

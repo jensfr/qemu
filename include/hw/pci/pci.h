@@ -266,6 +266,7 @@ typedef struct PCIReqIDCache PCIReqIDCache;
 struct PCIDevice {
     DeviceState qdev;
     bool partially_hotplugged;
+    char *net_failover_pair_id;
 
     /* PCI config space */
     uint8_t *config;

@@ -64,6 +64,8 @@ static char *pcibus_get_fw_dev_path(DeviceState *dev);
 static void pcibus_reset(BusState *qbus);
 
 static Property pci_props[] = {
+    DEFINE_PROP_STRING("net_failover_pair_id", PCIDevice,
+            net_failover_pair_id),
     DEFINE_PROP_PCI_DEVFN("addr", PCIDevice, devfn, -1),
     DEFINE_PROP_STRING("romfile", PCIDevice, romfile),
     DEFINE_PROP_UINT32("rombar",  PCIDevice, rom_bar, 1),
