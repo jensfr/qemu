@@ -2079,6 +2079,7 @@ static void pci_qdev_realize(DeviceState *qdev, Error **errp)
     ObjectClass *klass = OBJECT_CLASS(pc);
     Error *local_err = NULL;
     bool is_default_rom;
+    uint16_t class_id;
 
     /* initialize cap_present for pci_is_express() and pci_config_size(),
      * Note that hybrid PCIs are not set automatically and need to manage
@@ -2099,6 +2100,14 @@ static void pci_qdev_realize(DeviceState *qdev, Error **errp)
         if (local_err) {
             error_propagate(errp, local_err);
             do_pci_unregister_device(pci_dev);
+            return;
+        }
+    }
+
+    if (pci_dev->net_failover_pair_id != NULL) {
+        class_id = pci_get_word(pci_dev->config + PCI_CLASS_DEVICE);
+        if (class_id != PCI_CLASS_NETWORK_ETHERNET) {
+            error_setg(errp, "failover device is not an Ethernet device");
             return;
         }
     }

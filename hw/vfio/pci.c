@@ -2719,7 +2719,6 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
     int groupid;
     int i, ret;
     bool is_mdev;
-    uint16_t class_id;
 
     if (qemu_opt_foreach(pdev->qdev.opts, has_net_failover_arg,
                          (void *) pdev->qdev.opts, &err) == 0) {
@@ -2833,14 +2832,6 @@ static void vfio_realize(PCIDevice *pdev, Error **errp)
         ret = ret < 0 ? -errno : -EFAULT;
         error_setg_errno(errp, -ret, "failed to read device config space");
         goto error;
-    }
-
-    if (pdev->net_failover_pair_id != NULL) {
-        class_id = pci_get_word(pdev->config + PCI_CLASS_DEVICE);
-        if (class_id != PCI_CLASS_NETWORK_ETHERNET) {
-            error_setg(errp, "failover device is not an Ethernet device");
-            goto error;
-        }
     }
 
     /* vfio emulates a lot for us, but some bits need extra love */
