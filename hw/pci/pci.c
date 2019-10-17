@@ -2105,6 +2105,11 @@ static void pci_qdev_realize(DeviceState *qdev, Error **errp)
     }
 
     if (pci_dev->net_failover_pair_id != NULL) {
+        if (!pci_is_express(pci_dev)) {
+            error_setg(errp, "failover device is not a PCIExpress device");
+            error_propagate(errp, local_err);
+            return;
+        }
         class_id = pci_get_word(pci_dev->config + PCI_CLASS_DEVICE);
         if (class_id != PCI_CLASS_NETWORK_ETHERNET) {
             error_setg(errp, "failover device is not an Ethernet device");
