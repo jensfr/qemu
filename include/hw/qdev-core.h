@@ -156,9 +156,9 @@ struct DeviceListener {
     void (*realize)(DeviceListener *listener, DeviceState *dev);
     void (*unrealize)(DeviceListener *listener, DeviceState *dev);
     /*
-     * This callback is called just upon init of the DeviceState
-     * and can be used by a standby device for informing qdev if this
-     * device should be hidden by checking the device opts
+     * This callback is called upon init of the DeviceState and allows to
+     * inform qdev that a device should be hidden, depending on the device
+     * opts, for example, to hide a standby device.
      */
     void (*should_be_hidden)(DeviceListener *listener, QemuOpts *device_opts,
             bool *match_found, bool *res);
