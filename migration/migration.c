@@ -56,10 +56,6 @@
 
 #define MAX_THROTTLE  (32 << 20)      /* Migration transfer speed throttling */
 
-/* Time in milliseconds to wait for guest OS to unplug PCI device */
-#define FAILOVER_GUEST_UNPLUG_WAIT 10000
-#define FAILOVER_UNPLUG_RETRIES 5
-
 /* Amount of time to allocate to each "chunk" of bandwidth-throttled
  * data. */
 #define BUFFER_DELAY     100
@@ -3233,8 +3229,6 @@ static void *migration_thread(void *opaque)
     int64_t setup_start = qemu_clock_get_ms(QEMU_CLOCK_HOST);
     MigThrError thr_error;
     bool urgent = false;
-    bool all_unplugged = true;
-    int i = 0;
 
     rcu_register_thread();
 
@@ -3271,25 +3265,17 @@ static void *migration_thread(void *opaque)
 
     qemu_savevm_state_setup(s->to_dst_file);
 
-    migrate_set_state(&s->state, MIGRATION_STATUS_SETUP,
-                      MIGRATION_STATUS_WAIT_UNPLUG);
+    if (qemu_savevm_nr_failover_devices()) {
+        migrate_set_state(&s->state, MIGRATION_STATUS_SETUP,
+                          MIGRATION_STATUS_WAIT_UNPLUG);
 
-    while (i < FAILOVER_UNPLUG_RETRIES &&
-           s->state == MIGRATION_STATUS_WAIT_UNPLUG) {
-        i++;
-        qemu_sem_timedwait(&s->wait_unplug_sem, FAILOVER_GUEST_UNPLUG_WAIT);
-        all_unplugged = qemu_savevm_state_guest_unplug_pending();
-        if (all_unplugged) {
-            break;
+        while (s->state == MIGRATION_STATUS_WAIT_UNPLUG &&
+                !qemu_savevm_state_guest_unplug_pending()) {
+            qemu_sem_timedwait(&s->wait_unplug_sem, 250);
         }
-    }
 
-    if (all_unplugged) {
         migrate_set_state(&s->state, MIGRATION_STATUS_WAIT_UNPLUG,
                 MIGRATION_STATUS_ACTIVE);
-    } else {
-        migrate_set_state(&s->state, MIGRATION_STATUS_WAIT_UNPLUG,
-                          MIGRATION_STATUS_CANCELLING);
     }
 
     s->setup_time = qemu_clock_get_ms(QEMU_CLOCK_HOST) - setup_start;
