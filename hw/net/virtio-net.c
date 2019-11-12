@@ -2809,8 +2809,16 @@ static bool failover_replug_primary(VirtIONet *n, Error **errp)
     if (n->primary_device_opts) {
         if (n->primary_dev) {
             n->primary_bus = n->primary_dev->parent_bus;
+            if (n->primary_bus) {
+                qdev_set_parent_bus(n->primary_dev, n->primary_bus);
+            } else  {
+                error_setg(errp, "virtio_net: couldn't set bus for primary");
+                goto out;
+            }
+        } else {
+            error_setg(errp, "virtio_net: couldn't find primary device");
+            goto out;
         }
-        qdev_set_parent_bus(n->primary_dev, n->primary_bus);
         n->primary_should_be_hidden = false;
         qemu_opt_set_bool(n->primary_device_opts,
                 "partially_hotplugged", true, errp);
@@ -2819,10 +2827,8 @@ static bool failover_replug_primary(VirtIONet *n, Error **errp)
             hotplug_handler_pre_plug(hotplug_ctrl, n->primary_dev, errp);
             hotplug_handler_plug(hotplug_ctrl, n->primary_dev, errp);
         }
-        if (!n->primary_dev) {
-            error_setg(errp, "virtio_net: couldn't find primary device");
-        }
     }
+out:
     return *errp != NULL;
 }
 
